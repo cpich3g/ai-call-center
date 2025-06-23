@@ -7,6 +7,7 @@ from azure.identity import DefaultAzureCredential, AzureDeveloperCliCredential, 
 from azure.core.credentials import AzureKeyCredential
 from backend.tools.tools import RTToolCall, Tool, ToolResultDirection
 from backend.helpers import transform_acs_to_openai_format, transform_openai_to_acs_format
+from backend.metrics_manager import metrics_manager
 
 class RTMiddleTier:
     endpoint: str
@@ -48,12 +49,12 @@ class RTMiddleTier:
             match message["type"]:
                 case "session.created":
                     session = message["session"]
-                    # Hide the instructions, tools and max tokens from clients, if we ever allow client-side
-                    # tools, this will need updating
+                    # Hide sensitive server information
                     session["instructions"] = ""
                     session["tools"] = []
                     session["tool_choice"] = "none"
                     session["max_response_output_tokens"] = None
+                    metrics_manager.start_call()
 
                 case "session.updated":
                     # Prompt the model to take over the conversation and talk whenever a session was updated
@@ -126,6 +127,8 @@ class RTMiddleTier:
                             if output["type"] == "function_call":
                                 outputs.remove(output)
                                 replace = True
+                            elif output.get("type") == "text":
+                                metrics_manager.add_transcript(output.get("text", ""))
                         if replace:
                             message = json.loads(json.dumps(message)) # TODO: This is a hack to make the message a dict again. Find out, what 'replace' does
 
@@ -217,4 +220,4 @@ class RTMiddleTier:
                     await asyncio.gather(from_client_to_server(), from_server_to_client())
                 except ConnectionResetError:
                     # Ignore the errors resulting from the client disconnecting the socket
-                    pass
+                    metrics_manager.end_call()
