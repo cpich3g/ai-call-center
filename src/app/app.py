@@ -10,6 +10,7 @@ from backend.rtmt import RTMiddleTier
 from backend.azure import get_azure_credentials, fetch_prompt_from_azure_storage
 from backend.rtmt import RTMiddleTier
 from backend.acs import AcsCaller
+from backend.metrics_manager import metrics_manager
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents.aio import SearchClient
 
@@ -126,6 +127,9 @@ async def create_app():
         phone_number = os.environ.get("ACS_SOURCE_NUMBER")
         return web.json_response({"phoneNumber": phone_number})
 
+    async def get_metrics(request):
+        return web.json_response(metrics_manager.get_metrics())
+
     # Register the routes
     app = web.Application()
     app.router.add_get('/', index)
@@ -135,6 +139,7 @@ async def create_app():
     app.router.add_get("/realtime-acs", websocket_handler_acs)
     app.router.add_post('/update-voice', update_voice)
     app.router.add_get('/source-phone-number', get_source_phone_number)
+    app.router.add_get('/metrics', get_metrics)
     
     if (caller is not None):
         app.router.add_post("/acs", caller.outbound_call_handler)
